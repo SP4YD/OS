@@ -12,27 +12,29 @@ void *copyingFile(void *arg) {
     char buffer[BUFFER_SIZE];
     ssize_t countRead, countWrite;
 
-    errno = 0;
     int fileFrom = open(info->from, O_RDONLY);
-    
-    while (errno == EMFILE) {
+    while (fileFrom == -1) {
+        if (errno != EMFILE) {
+            printf("Error opening 'from' file: %s\n", info->from);
+            freeInfo(info);
+            pthread_exit(NULL);
+        }
+
         sleep(3);
-        errno = 0;
         fileFrom = open(info->from, O_RDONLY);
     }
 
-    if (fileFrom == -1) {
-        printf("Error opening 'from' file: %s\n", info->from);
-        freeInfo(info);
-        pthread_exit(NULL);
-    }
-
     int fileWhere = open(info->where, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-    if (fileWhere == -1) {
-        printf("Error opening 'where' file: %s\n", info->where);
-        close(fileFrom);
-        freeInfo(info);
-        pthread_exit(NULL);
+    while (fileWhere == -1) {
+        if (errno != EMFILE) {
+            printf("Error creating 'where' file: %s\n", info->where);
+            close(fileFrom);
+            freeInfo(info);
+            pthread_exit(NULL);
+        }
+
+        sleep(3);
+        fileWhere = open(info->where, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     }
 
     while ((countRead = read(fileFrom, buffer, BUFFER_SIZE)) > 0) {
@@ -61,17 +63,16 @@ void *copyingDirectory(void *arg) {
         pthread_exit(NULL);
     }
 
-    errno = 0;
     DIR *dir = opendir(info->from);
-    while (errno == EMFILE) {
+    while (!dir) {
+        if (errno != EMFILE) {
+            printf("Error opening 'from' directory: %s\n", info->from);
+            freeInfo(info);
+            pthread_exit(NULL);
+        }
+
         sleep(3);
-        errno = 0;
         dir = opendir(info->from);
-    }
-    if (!dir) {
-        printf("Error opening 'from' directory: %s\n", info->from);
-        freeInfo(info);
-        pthread_exit(NULL);
     }
 
     struct dirent *entry;
